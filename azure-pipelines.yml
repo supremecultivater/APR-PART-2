@@ -1,33 +1,53 @@
-
 trigger:
-- main
+  branches:
+    include:
+      - main   # Runs pipeline when changes are pushed to main branch
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'windows-latest'   # Microsoft-hosted Windows agent
+
+variables:
+  buildConfiguration: 'Release'
 
 steps:
-- task: UseDotNet@2
+# Step 1: Restore NuGet packages
+- task: NuGetToolInstaller@1
+  displayName: 'Install NuGet'
+
+- task: NuGetCommand@2
   inputs:
-    packageType: 'sdk'
-    version: '6.x'
-    installationPath: $(Agent.ToolsDirectory)/dotnet
+    restoreSolution: '**/*.sln'
+  displayName: 'Restore NuGet Packages'
 
-- script: dotnet build --configuration Release
-  displayName: 'Build the project'
+# Step 2: Build Solution
+- task: VSBuild@1
+  inputs:
+    solution: '**/*.sln'
+    msbuildArgs: '/p:Configuration=$(buildConfiguration)'
+    platform: 'Any CPU'
+    configuration: '$(buildConfiguration)'
+  displayName: 'Build Solution'
 
-- script: dotnet test
-  displayName: 'Run unit tests'
+# Step 3: Run Tests
+- task: VSTest@2
+  inputs:
+    platform: 'Any CPU'
+    configuration: '$(buildConfiguration)'
+  displayName: 'Run Unit Tests'
 
-- script: dotnet publish --configuration Release --output $(Build.ArtifactStagingDirectory)
-  displayName: 'Publish the project'
-
+# Step 4: Publish Build Artifacts
 - task: PublishBuildArtifacts@1
   inputs:
-    pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-    artifactName: 'drop'
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
+  displayName: 'Publish Build Artifacts'
 
+# Step 5: Deploy to Test Environment
+# Example: Deploy to Azure Web App
 - task: AzureWebApp@1
   inputs:
-    azureSubscription: 'YourAzureSubscription'
-    appName: 'YourTestWebApp'
-    package: $(Pipeline.Workspace)/drop
+    azureSubscription: '<Your-Service-Connection-Name>'
+    appName: '<Your-Test-WebApp-Name>'
+    package: '$(System.DefaultWorkingDirectory)/**/*.zip'
+  displayName: 'Deploy to Azure Test Web App'
